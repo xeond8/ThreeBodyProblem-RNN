@@ -31,7 +31,7 @@ class AttentionPooling(nn.Module):
         scores = self.attn(x).squeeze(-1)
 
         if lengths is not None:
-            mask = torch.arange(x.size(1), device=x.device)[None, :] < lengths[:, None]
+            mask = torch.arange(x.size(1))[None, :] < lengths[:, None]
             scores[~mask] = float("-inf")
 
         attn_weights = torch.softmax(scores, dim=1)
@@ -49,7 +49,7 @@ class LSTMClassifier(nn.Module):
         linear_before = []
         linear_before.append(nn.Linear(input_size, hidden_size))
         for _ in range(1, num_lin_before):
-            linear_before.append(nn.ReLU())
+            linear_before.append(nn.GELU())
             linear_before.append(nn.Dropout(dropout_rate))
             linear_before.append(nn.Linear(hidden_size, hidden_size))
         self.linear_before = nn.Sequential(*linear_before)
@@ -60,7 +60,7 @@ class LSTMClassifier(nn.Module):
 
         linear_after = []
         for _ in range(num_lin_after - 1):
-            linear_after.append(nn.ReLU())
+            linear_after.append(nn.GELU())
             linear_after.append(nn.Dropout(dropout_rate))
             linear_after.append(nn.Linear(hidden_size, hidden_size))
         self.linear_after = nn.Sequential(*linear_after)
@@ -85,13 +85,13 @@ class LSTMClassifier(nn.Module):
 
         if self.pooling_type == "mean":
             if lengths is not None:
-                mask = torch.arange(lstm_out.size(1), device=x.device)[None, :] < lengths[:, None]
+                mask = torch.arange(lstm_out.size(1))[None, :] < lengths[:, None]
                 pooled = (lstm_out * mask.unsqueeze(-1)).sum(dim=1) / lengths.unsqueeze(1)
             else:
                 pooled = lstm_out.mean(dim=1)
         elif self.pooling_type == "max":
             if lengths is not None:
-                mask = torch.arange(lstm_out.size(1), device=x.device)[None, :] < lengths[:, None]
+                mask = torch.arange(lstm_out.size(1))[None, :] < lengths[:, None]
                 lstm_out[~mask] = float("-inf")
                 pooled, _ = lstm_out.max(dim=1)
             else:
@@ -162,13 +162,13 @@ class CNNLSTMClassifier(nn.Module):
 
         if self.pooling_type == "mean":
             if lengths is not None:
-                mask = torch.arange(lstm_out.size(1), device=x.device)[None, :] < lengths[:, None]
+                mask = torch.arange(lstm_out.size(1))[None, :] < lengths[:, None]
                 pooled = (lstm_out * mask.unsqueeze(-1)).sum(dim=1) / lengths.unsqueeze(1)
             else:
                 pooled = lstm_out.mean(dim=1)
         elif self.pooling_type == "max":
             if lengths is not None:
-                mask = torch.arange(lstm_out.size(1), device=x.device)[None, :] < lengths[:, None]
+                mask = torch.arange(lstm_out.size(1))[None, :] < lengths[:, None]
                 lstm_out[~mask] = float("-inf")
                 pooled, _ = lstm_out.max(dim=1)
             else:
@@ -220,7 +220,7 @@ class GRUClassifier(nn.Module):
             packed = nn.utils.rnn.pack_padded_sequence(x, lengths.cpu(), batch_first=True, enforce_sorted=False)
             packed_out, hn = self.gru(packed, h0)
             gru_out, _ = nn.utils.rnn.pad_packed_sequence(packed_out, batch_first=True)
-            mask = torch.arange(gru_out.size(1), device=lengths.device)[None, :] < lengths[:, None]
+            mask = torch.arange(gru_out.size(1))[None, :] < lengths[:, None]
             if self.pooling_type == "mean":
                 pooled = (gru_out * mask.unsqueeze(-1)).sum(dim=1) / lengths.unsqueeze(1)
             elif self.pooling_type == "max":

@@ -3,15 +3,12 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import ExponentialLR
 import orbipy as op
-from corrections.corrections import custom_base_correction, custom_station_keeping, zero_correction
+
 import numpy as np
-import pandas as pd
 import hydra
 import os
 from omegaconf import DictConfig
 import logging
-import time
-from tqdm import trange
 
 from ml.lstm import TrajectoryDataset, OldLSTMClassifier, LSTMModel, FC_Class, LSTMClassifier, NewOldLSTMClassifier, GRUClassifier, CNNLSTMClassifier
 
@@ -19,28 +16,22 @@ log = logging.getLogger(__name__)
 
 @hydra.main(config_name="config", config_path="config")
 def main(cfg: DictConfig):
-    dfdv = pd.read_csv(cfg.data.csv_path)
-    dfdv = pd.concat([dfdv.iloc[cfg.data.slice_start:cfg.data.slice_end],
-                      dfdv.iloc[cfg.data.slice_start2:cfg.data.slice_end2]])
-
 
     X = np.loadtxt(cfg.data.x_train_path).reshape((-1, cfg.model.num_times, cfg.model.input_size))
     y = np.loadtxt(cfg.data.y_train_path).reshape((-1, cfg.model.num_times))
 
-    X_test = np.loadtxt(
-        "C:/Users/levpy/OneDrive/Рабочий стол/Уник/Точки либрации/data/x_test_355_1_ran(140)8pie-6.csv").reshape(-1,
-                                                                                                                 140, 6)
-    y_test = np.loadtxt(
-        "C:/Users/levpy/OneDrive/Рабочий стол/Уник/Точки либрации/data/y_test_355_1_ran(140)8pie-6.csv").reshape(-1,
-                                                                                                                 140)[:,
-             0]
-    lengths_test = np.full(X_test.shape[0], 140)
+    if cfg.data.x_test_path != "None":
+        X_test = np.loadtxt(cfg.data.x_test_path).reshape((-1, cfg.model.num_times, cfg.model.input_size))
+        y_test = np.loadtxt(cfg.data.y_test_path).reshape((-1, cfg.model.num_times))
+        lengths_test = np.full(X_test.shape[0], 140)
 
-    '''X_test = torch.tensor(X_test[:], dtype=torch.float32)
-    X_test[:, :, 0] -= op.crtbp3_model().L1
-    y_test = (y_test > 0)
-    y_test = torch.tensor(y_test[:], dtype=torch.float32)
-    lengths_test = torch.tensor(lengths_test[:], dtype=torch.long)'''
+        X_test = torch.tensor(X_test[:], dtype=torch.float32)
+        y_test = (y_test > 0)
+        y_test = torch.tensor(y_test[:], dtype=torch.float32)
+        lengths_test = torch.tensor(lengths_test[:], dtype=torch.long)
+
+        if cfg.model.normalise:
+            X_test[:, :, 0] -= op.crtbp3_model().L1
 
     if cfg.data.lengths_train_path != "None":
         lengths = np.loadtxt(cfg.data.lengths_train_path)
@@ -96,21 +87,10 @@ def main(cfg: DictConfig):
 
 
             elif cfg.model.pooling == "None":
-                '''batch_y = batch_y[:, :max(batch_lengths)]
-
-                mask = torch.arange(max(batch_lengths), device=batch_X.device).unsqueeze(0) < batch_lengths.unsqueeze(1)
-                mask = mask.to(outputs_seq.dtype)
-                loss_all = criterion(outputs, batch_y)
-                mask_loss = loss_all * mask
-                loss = mask_loss.sum() / mask.sum()'''
 
                 loss = criterion(outputs, batch_y).mean()
                 loss.backward()
                 optimizer.step()
-
-                '''logits = outputs_seq[torch.arange(outputs_seq.size(0)), batch_lengths - 1]
-                preds = (torch.sigmoid(logits) > 0.5).long().squeeze(-1)
-                true = batch_y[torch.arange(batch_y.size(0)), batch_lengths - 1].long()'''
 
                 logits = outputs[:, -1]
                 preds = (torch.sigmoid(logits) > 0.5).long().squeeze(-1)
@@ -124,26 +104,20 @@ def main(cfg: DictConfig):
 
         model.eval()
 
-        '''outputs_test = model(X_test, lengths_test).squeeze(-1)
-        print(outputs_test.shape)
-        accuracy_test = ((outputs_test > 0) == y_test).sum().item()'''
+        if cfg.data.x_test_path != "None":
+            outputs_test = model(X_test).squeeze(-1)
+            if cfg.model.pooling == "None":
+                outputs_test = outputs_test[:, -1]
+            else:
+                pass
+            preds = (torch.sigmoid(outputs_test) > 0.5).long().squeeze(-1)
+            accuracy_test = (preds == y_test[:, 0]).sum().item()
 
-        '''cor = custom_base_correction(model, direction=op.unstable_direction(op.crtbp3_model()), param_init=0,
-                                     param_delta=1e-9, param_n_points=3, tol=1e-14, max_iter_bisect=100,
-                                     max_iter=5, Nt=cfg.model.num_times, T=cfg.model.T, skipt=cfg.model.skipt, normalise=cfg.model.normalise)
-        dv = 0
-        for i in range(dfdv.shape[0]):
-            try:
-                s = np.array(dfdv.iloc[i, 1:7])
-                sk = custom_station_keeping(op.crtbp3_model(), zero_correction(), cor, verbose=False, rev=np.pi/2)
-                _ = sk.prop(s, N=20, ret_df=True)
-                dv += np.linalg.norm(np.array(sk.dvout)[:, 4:], axis=1).mean() < 1e-9
-
-            except Exception as e:
-                continue'''
-
-        log.info(
-            f"Epoch [{epoch + 1}/{cfg.training.num_epochs}], Loss: {acc_loss / len(dataloader):.8f}, Train Accuracy: {accuracy / X.shape[0]:.8f}")
+            log.info(
+                f"Epoch [{epoch + 1}/{cfg.training.num_epochs}], Loss: {acc_loss / len(dataloader):.8f}, Train Accuracy: {accuracy / X.shape[0]:.8f}, Test Accuracy: {accuracy_test / X_test.shape[0]:.8f}")
+        else:
+            log.info(
+                f"Epoch [{epoch + 1}/{cfg.training.num_epochs}], Loss: {acc_loss / len(dataloader):.8f}, Train Accuracy: {accuracy / X.shape[0]:.8f}")
         save_path = f"{os.getcwd()}/model_{epoch + 1}.pt"
         torch.save(model.state_dict(), save_path)
 

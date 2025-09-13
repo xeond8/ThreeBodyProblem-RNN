@@ -1,6 +1,7 @@
 import orbipy as op
 from corrections.corrections import custom_base_correction
 import numpy as np
+import pandas as pd
 
 
 class custom_station_keeping():
@@ -23,6 +24,7 @@ class custom_station_keeping():
     def reset(self):
         self.dvout = []
         self.arr = np.array([])
+        self.ev_arr = np.array([])
 
     def calc_dv(self, s, cor):
         return cor.calc_zero(s) - s
@@ -74,10 +76,16 @@ class custom_station_keeping():
 
             if events:
                 if self.ev_arr.shape[0]:
-                    if ev.shape[0] > 1:
-                        self.ev_arr = np.vstack((self.ev_arr, ev.copy()[:-1]))
+                    if ev.shape[0] >= 1:
+                        if isinstance(self.rev, tuple):
+                            self.ev_arr = np.vstack((self.ev_arr, ev.copy()[:-1]))
+                        else:
+                            self.ev_arr = np.vstack((self.ev_arr, ev.copy()))
                 else:
-                    self.ev_arr = ev[:-1].copy()
+                    if isinstance(self.rev, tuple):
+                        self.ev_arr = ev[:-1].copy()
+                    else:
+                        self.ev_arr = ev.copy()
 
             if self.verbose: print(i, end=' ')
 
@@ -103,13 +111,3 @@ class custom_station_keeping():
                 return self.arr, self.ev_arr
             else:
                 return self.arr
-
-
-def calc_dk(df, k):
-    s = 0
-    N = df.shape[0]
-    for i in range(N - 2 * k):
-        x = np.array(
-            df.loc[i, ['x', 'y', 'z', 'vx', 'vy', 'vz']] - df.loc[i + 2 * k, ['x', 'y', 'z', 'vx', 'vy', 'vz']])
-        s += np.linalg.norm(x)
-    return s / (N - 2 * k)
