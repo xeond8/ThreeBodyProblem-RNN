@@ -1,19 +1,17 @@
 data:
-  csv_path: "C:/Users/levpy/OneDrive/Рабочий стол/Уник/Точки либрации/lstm_contours/jc100_left.csv"
-  x_train_path: "C:/Users/levpy/OneDrive/Рабочий стол/Уник/Точки либрации/data/x_train_sk_500_1_40_ran(120)7pie-9.csv"
-  y_train_path: "C:/Users/levpy/OneDrive/Рабочий стол/Уник/Точки либрации/data/y_train_sk_500_1_40_ran(120)7pie-9.csv"
-  lengths_train_path: "None"
-  slice_start: 15
-  slice_end: 15
-  slice_start2: 16
-  slice_end2: 16
+  x_train_path: pathx
+  y_train_path: pathy
+  x_test_path: None
+  y_test_path: None
+  lengths_train_path: None
+  lengths_test_path: None
 
 model:
-  type: "NewOldLSTMClassifier"
-  pooling: "None"
+  type: LSTMClassifier
+  pooling: None
   input_size: 6
-  num_times: 120
-  T: 21.9912
+  num_times: 140
+  T: 25.1328
   skipt: 0.0
   hidden_size: 128
   num_rnn_layers: 3
